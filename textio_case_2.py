@@ -115,7 +115,7 @@ for i in range(10):
 topic_scores = pd.DataFrame(scores, columns=[10,20,30,50,100,200])
 plt.plot(topic_scores.mean())
 topic_scores.to_csv(path + 'topic_scores')
-#n_topic = 
+n_topic = 50
 
 
 #   Tuning the final classifier
@@ -127,15 +127,36 @@ classifier = Pipeline([
         ('lda', LatentDirichletAllocation(n_topics=n_topic, n_jobs=-1)),
         ('clf', LinearSVC(multi_class='ovr'))])
 
-params = {'lda__n_topics':[10,20,30,50,100,200],
-          'lda__doc_topic_prior':[None,0.001,0.01,0.1,1],
-          'lda__topic_word_prior':[None,0.001,0.01,0.1,1],
-          'clf__penalty':['l1','l2'],
-          'clf__C':[0.001,0.01,1,10,100]}
+params = {#'lda__doc_topic_prior':[None,0.001,0.01,0.1,1],
+          #'lda__topic_word_prior':[None,0.001,0.01,0.1,1],
+          'clf__C':[0.001,0.01]
+          }
 
 gs = GridSearchCV(classifier, param_grid=params, cv=5, n_jobs=-1)
 gs.fit(X_train, y_train)
 gs.score(X_test, y_test)
+
+
+
+cv = gs.best_estimator_.named_steps['vectorizer']
+ld = gs.best_estimator_.named_steps['lda']  
+sv = gs.best_estimator_.named_steps['clf'] 
+
+topic_dict = {}
+for i, j in enumerate(ld.components_):
+    topic_dict[i] = ' '.join([cv.get_feature_names()[k] for k in j.argsort()[:-20:-1]])
+topics = pd.DataFrame(topic_dict, index=['Words']).T
+
+
+cat_dict = {}
+for i in range(len(sv.classes_)):
+    cats[sv.classes_[i]] = sv.coef_[i]
+categories = pd.DataFrame(cats)
+
+
+[x for x in categories['Art'].argsort()].index(1)
+categories['Food'][categories['Food'] >= 0.01]
+categories['Art'].nsmallest(3)
 
 
 
@@ -158,14 +179,6 @@ topic_perplex = pd.DataFrame(perplex, columns=range(5,101,5))
 plt.plot(topic_perplex.mean())
 '''
 
-vectorizer = CountVectorizer(max_features=8000, analyzer='word', stop_words=StopWords)
-v = vectorizer.fit_transform(X_train)
-
-lda = LatentDirichletAllocation(n_topics=20, n_jobs=-1)
-lda.fit(v)
-
-lda.components_
-feat_names = vectorizer.get_feature_names()
 
 def display_topics(model, feature_names, no_top_words):
     for topic_idx, topic in enumerate(model.components_):
@@ -173,69 +186,15 @@ def display_topics(model, feature_names, no_top_words):
         print " ".join([feature_names[i]
                         for i in topic.argsort()[:-no_top_words - 1:-1]])
 
-display_topics(lda, feat_names, 20)
 
+def gen_classes():
+len(gs.best_estimator_.named_steps['clf'].coef_)
 
+for i, j in enumerate(sv.classes_):
+    print i
+    print j
 
-
-
-
-
-
-
-
-
-
-
-test = text['full_text'][0]
-
-tk_words = RegexpTokenizer('\w+')
-tk_nonwords = RegexpTokenizer('\W+')
-
-
-z = tk_words.tokenize(test)
-tk_nonwords.tokenize(test)
-
-
-classifier = Pipeline([
-    ('vectorizer', CountVectorizer(max_features=1000, analyzer='word', stop_words=StopWords)),
-#    ('tfidf', TfidfTransformer()),
-    ('lda', LatentDirichletAllocation(n_topics=30, n_jobs=-1)),
-    ('clf', LinearSVC(multi_class='crammer_singer'))])
-
-classifier.fit(text['full_text'].iloc[0:5000], text['category'].iloc[0:5000])
-pred = classifier.predict(text['full_text'].iloc[5000:])
-
-
-y_test = text['category'][5000:]
-y_test.reset_index(inplace=True, drop=True)
-
-predictions = pd.DataFrame([pred, y_test, text['full_text'][5000:]]).T
-#predictions.to_csv(path + 'test.csv')
-
-yes = 0
-for i in range(len(predictions)):
-    if predictions[0].iloc[i] == predictions[1].iloc[i]:
-        yes += 1
-print(float(yes)/len(y_test))\
-
-
-mlb.inverse_transform(pred)
-sum(pred == y[5000:])/len(y[5000:])
-
-cntvec = CountVectorizer(max_features=1000, analyzer='word', stop_words=StopWords)
-x = cntvec.fit([text['full_text'][0]])
-z = TfidfTransformer()
-f = z.fit_transform(x)
-
-
-
-text.info()
-len(data['category'].value_counts())
-data[data['full_text'].isnull()]['blurb']
-
-mlb = MultiLabelBinarizer()
-y = mlb.fit_transform(text['category'])
+coeffs_mean = pd.DataFrame(gs.best_estimator_.named_steps['clf'].coef_, columns = X.columns).T.mean(axis=1)
 
 
 
