@@ -12,6 +12,7 @@ import numpy as np
 import re
 import matplotlib.pyplot as plt
 import seaborn as sns
+import time
 
 import nltk
 nltk.download()
@@ -60,6 +61,7 @@ len_mean[len_mean['length'] > 3000]
 X = text['full_text']
 y = text['category']
 
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1000, stratify=y)
 
 #   Attempting to tune transforming componenets of pipeline
 #   Method is to iteratively split dataset and predict using default classifier
@@ -69,19 +71,19 @@ y = text['category']
 #   Generally looking for 'elbow' in predictive accuracy, indicating drop off in marginal benefit
 #   Computing power is also a factor in consideration when picking final value
 scores = []
-for i in range(10):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y)
+for i in range(5):
+    X_trn, X_tst, y_trn, y_tst = train_test_split(X_train, y_train, test_size=0.2, stratify=y_train)
     
     x = []
     for j in [1000,2000,4000,8000,12000,16000,20000]:
         
-        classifier = Pipeline([
+        classifier_test = Pipeline([
             ('vectorizer', CountVectorizer(max_features=j, analyzer='word', stop_words=StopWords)),
-            ('tfidf', TfidfTransformer()),
+            ('lda', LatentDirichletAllocation(n_jobs=-1)),
             ('clf', LinearSVC(multi_class='ovr'))]) 
     
-        classifier.fit(X_train, y_train)
-        x.append(classifier.score(X_test, y_test))
+        classifier_test.fit(X_trn, y_trn)
+        x.append(classifier_test.score(X_tst, y_tst))
         print(i,j)
     
     scores.append(x)
@@ -89,25 +91,26 @@ for i in range(10):
 feat_scores = pd.DataFrame(scores, columns=[1000,2000,4000,8000,12000,16000,20000])
 plt.plot(feat_scores.mean())
 feat_scores.to_csv(path + 'feat_scores.csv')
-n_feat = 8000
+n_feat = 
+#feat_rng = range(7000,90001,200)
 
 
 #   Tuning number of topics for LDA to draw from
 #   Attempted to use perplexity measure to tune, but it seems to be broken in sklearn
 scores = []
 for i in range(10):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, stratify=y)
+    X_trn, X_tst, y_trn, y_tst = train_test_split(X_train, y_train, test_size=0.2, stratify=y_train)
 
     x = []
     for j in [10,20,30,50,100,200]:
         
-        classifier = Pipeline([
+        classifier_test = Pipeline([
             ('vectorizer', CountVectorizer(max_features=n_feat, analyzer='word', stop_words=StopWords)),
             ('lda', LatentDirichletAllocation(n_topics=j, n_jobs=-1)),
             ('clf', LinearSVC(multi_class='ovr'))])
     
-        classifier.fit(X_train, y_train)
-        x.append(classifier.score(X_test, y_test))
+        classifier_test.fit(X_trn, y_trn)
+        x.append(classifier_test.score(X_tst, y_tst))
         print(i,j)
         
     scores.append(x)
@@ -115,26 +118,33 @@ for i in range(10):
 topic_scores = pd.DataFrame(scores, columns=[10,20,30,50,100,200])
 plt.plot(topic_scores.mean())
 topic_scores.to_csv(path + 'topic_scores')
-n_topic = 50
+n_topic = 
+#top_rng = range(40, 61, 2)
 
 
 #   Tuning the final classifier
 #   This includes additional parameters for the LDA joint distributions
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1000, stratify=y)
+
 
 classifier = Pipeline([
         ('vectorizer', CountVectorizer(max_features=n_feat, analyzer='word', stop_words=StopWords)),
         ('lda', LatentDirichletAllocation(n_topics=n_topic, n_jobs=-1)),
         ('clf', LinearSVC(multi_class='ovr'))])
 
-params = {#'lda__doc_topic_prior':[None,0.001,0.01,0.1,1],
-          #'lda__topic_word_prior':[None,0.001,0.01,0.1,1],
-          'clf__C':[0.001,0.01]
-          }
+params = [  {'clf__penalty':['l2'],
+             'clf__loss':['hinge','squared_hinge']},
+            {'clf__penalty':['l1'],
+             'clf__dual':[False]}   ]
 
 gs = GridSearchCV(classifier, param_grid=params, cv=5, n_jobs=-1)
 gs.fit(X_train, y_train)
-gs.score(X_test, y_test)
+
+pred = gs.predict(X_test)
+print(gs.score(X_test, y_test))
+
+comparison = pd.DataFrame([pred, y_test], index=['Predicted', 'Actual']).T
+mispredict = comparison[comparison['Predicted'] != comparison['Actual']]
+pd.DataFrame(mispredict[mispredict['Predicted'] == 'Film & Video']['Actual'].value_counts())
 
 
 
@@ -144,7 +154,7 @@ sv = gs.best_estimator_.named_steps['clf']
 
 topic_dict = {}
 for i, j in enumerate(ld.components_):
-    topic_dict[i] = ' '.join([cv.get_feature_names()[k] for k in j.argsort()[:-20:-1]])
+    topic_dict[i] = ' '.join([cv.get_feature_names()[k] for k in j.argsort()[:-30:-1]])
 topics = pd.DataFrame(topic_dict, index=['Words']).T
 
 
@@ -155,7 +165,8 @@ categories = pd.DataFrame(cats)
 
 
 [x for x in categories['Art'].argsort()].index(1)
-categories['Food'][categories['Food'] >= 0.01]
+categories['Food'][categories['Food'] >= 1]
+categories['Fashion'].nlargest(6)
 categories['Art'].nsmallest(3)
 
 
@@ -178,6 +189,10 @@ for i in range(10):
 topic_perplex = pd.DataFrame(perplex, columns=range(5,101,5))
 plt.plot(topic_perplex.mean())
 '''
+
+classifier_test.named_steps['tfidf'].components_
+
+
 
 
 def display_topics(model, feature_names, no_top_words):
