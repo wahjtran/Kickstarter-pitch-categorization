@@ -28,7 +28,7 @@ from sklearn.metrics import confusion_matrix, classification_report, recall_scor
 
 #   Importing data
 
-path = 'C:/Users/tranw/OneDrive/Documents/Misc/Case studies/Textio Case/Case 2/'
+path = ''
 data = pd.read_csv(path + 'kickstarter_corpus.csv')
 
 
